@@ -47,8 +47,8 @@ class Navigator_State:
         self.pd = self.v
         self.vd = np.array((0.,0.,0.))
         self.qd = np.quaternion(0, 0, 0 ,0)
-        self.abd = np.array((0.,0.,0.))
-        self.wbd = np.array((0.,0.,0.))
+        #self.abd = np.array((0.,0.,0.))
+        #self.wbd = np.array((0.,0.,0.))
     def set_state(self,p0,v0,q0,ab0,w0):
         #TODO add check on numpy type and dimensions
         self.p = p0
@@ -68,7 +68,7 @@ class Navigator_State:
         
 
 class Navigator:
-    def __init__(self,sigma_INS,sigma_UWB,UWB_anchors_pos, a, l, lamb, b, alpha, zeta):
+    def __init__(self,sigma_INS,sigma_UWB,UWB_anchors_pos, a, l, lamb, b, alpha, zeta, MNCsigma=0.1):
         """Init class object
 
         Parameters
@@ -97,12 +97,20 @@ class Navigator:
             and viceversa\n
         zeta : [float]
             outliers detection treshold\n
+        MNCsigma : [float]
+            std_dev for initializing Rn
         """
         self.iterations = 0
         self.g = np.array([0.,0.,-9.81])
         self.xn = Navigator_State() #nominal state
+        self.xn_prev = Navigator_State() #previous instance of the nominal state (used for F?)
+        self.x_INS = Navigator_State() # state updated only by the INS measurements, no correction of any type
         self.dx = Navigator_State() #error state
         self.dxapp = np.zeros((15,)) #error state with approximate rotation (\delta x in the paper) (p,v,q,ab,wb)
+        self.am_prev = np.array((0.,0.,0.))
+        self.wm_prev = np.array((0.,0.,0.))
+        self.am = np.array((0.,0.,0.))
+        self.wm = np.array((0.,0.,0.)) # previous INS measurements are stored since are needed for F computation?
         self.P = np.zeros(((15,15)))
         self.sigma_INS = np.array([sigma_INS[0],sigma_INS[1]])
         self.sigma_INS_RW = np.array([sigma_INS[0],sigma_INS[1]])#INS integration random walk variance, updated each step
@@ -125,14 +133,14 @@ class Navigator:
         self.epsilon = np.zeros((self.l_par,6)) # most recent as last element
         self.Sn = np.eye(6) # estimated epsilon covariance (eqn(36))
         self.S = np.eye(6) # theorethical epsilon covariance (eqn(23))
-        self.Rn = np.zeros((6,6)) # theoretical MNC estimate
-        self.R = np.zeros((6,6)) # estimated MNC
+        self.Rn = MNCsigma*np.eye(6) # theoretical MNC estimate
+        self.R = MNCsigma*np.eye(6) # estimated MNC
         self.set_R_innovation_weight_par(lamb,b, alpha) #parameters of R innovation contribution weight, eqn (27)
         self.fuzzy_setup()
         self.rfz = 0.
         self.sfz = 1.
         self.zeta = zeta
-        self.update_D_theoretical_zzT_expectation() #just for initialization purpose
+        self.D = np.eye(6) #just for initialization purpose
 
     def compute_xnd(self,am,wm):
         """derivative of the nominal state, eq.(4) of the paper
@@ -196,7 +204,14 @@ class Navigator:
         self.pmUWB = (sp.linalg.pinv(self.G).dot(b_add + self.b_precomp))/2.
         self.vmUWB = (self.pmUWB-self.pmUWB_prev)/dt 
         self.z = np.array((*(self.pmUWB-self.xn.p), *(self.vmUWB-self.xn.v)))
-        return self.pmUWB, self.vmUWB
+        #self.z = np.array((*(self.pmUWB-self.x_INS.p), *(self.vmUWB-self.x_INS.v)))
+        return self.pmUWB.copy(), self.vmUWB.copy()
+    
+    def compute_z(self):
+        # alternative computation of z?
+        # for this I should already know the actual error covariance, which I'm trying to estimate
+        #self.z = self.H.dot(self.dxapp) + np.random.normal(loc=0.0,scale=?,size=(6,))
+        pass
 
     def INS_predict_xn_nominal_state(self,dt,am,wm):
         """Predict the nominal state with INS measurement
@@ -215,9 +230,36 @@ class Navigator:
         [Navigator_State]
             nominal state of the robot
         """
+        # store previous state
+        self.xn_prev.p=self.xn.p
+        self.xn_prev.v=self.xn.v
+        self.xn_prev.q=self.xn.q
+        self.xn_prev.ab=self.xn.ab
+        self.xn_prev.wb=self.xn.wb
+        # predict
         derivatives = self.compute_xnd(am,wm)
         self.xn.backward_euler(dt,*derivatives)
-        return self.xn
+
+    def INS_predict_x_INS(self,dt,am,wm):
+        """Predict the state only with INS measurement
+
+        Parameters
+        ----------
+        dt : [float]
+            time from the last prediction with INS\n
+        am : [np.array((3,),float)]
+            acceleration INS measurement\n
+        wm : [np.array((3,),float)]
+            angular speed INS measurement
+
+        Returns
+        -------
+        [Navigator_State]
+            nominal state of the robot
+        """
+        # predict
+        derivatives = self.compute_xnd(am,wm)
+        self.x_INS.backward_euler(dt,*derivatives)
 
     def update_Q(self,dt):
         self.Q = sp.linalg.block_diag(np.eye(3)*((self.sigma_INS[0]*dt)**2),   np.eye(3)*((self.sigma_INS[1]*dt)**2),
@@ -228,21 +270,29 @@ class Navigator:
             np.eye(3)*((self.sigma_INS_RW[0]*dt)**2),  np.eye(3)*((self.sigma_INS_RW[1]*dt)**2))
         return self.Q
     
-    def update_F(self,dt,am,wm):
+    def update_F(self,dt,am_prev,wm_prev):
         # eqn (19)
         # not explained in the paper, for Rtmp approximate omega*dt as the axis-angle rotation vector,
         # then compute a rotation matrix
         # https://www.researchgate.net/post/Validity_of_Rotation_matrix_calculations_from_angular_velocity_reading
-        Rtmp = (Rot.from_rotvec((wm-self.xn.wb)*dt)).as_matrix()
+        Rtmp = (Rot.from_rotvec((wm_prev-self.xn_prev.wb)*dt)).as_matrix()
+        C_prev = quat.as_rotation_matrix(self.xn_prev.q)
         self.F = np.block([[np.eye(3),     np.eye(3)*dt,   np.zeros((3,3)),  np.zeros((3,3)),    np.zeros((3,3))],
-                    [np.zeros((3,3)),  np.eye(3),  -(quat.as_rotation_matrix(self.xn.q)).dot(skew(am-self.xn.ab)),
-                        -quat.as_rotation_matrix(self.xn.q)*dt,     np.zeros((3,3))],
+                    [np.zeros((3,3)),  np.eye(3),  -C_prev.dot(skew(am_prev-self.xn_prev.ab))*dt,
+                        -C_prev*dt,     np.zeros((3,3))],
                     [np.zeros((3,3)),   np.zeros((3,3)),    Rtmp,               np.zeros((3,3)),    -np.eye(3)*dt],
                     [np.zeros((3,3)),   np.zeros((3,3)),    np.zeros((3,3)),    np.eye(3),          np.zeros((3,3))],
                     [np.zeros((3,3)),   np.zeros((3,3)),    np.zeros((3,3)),    np.zeros((3,3)),    np.eye(3)]])
         return self.F
 
     def predict_dx_error_state(self):
+        """[DEPRECATED] shouldn't be used, the predication on dx is always zero (null mean)
+
+        Returns
+        -------
+        [type]
+            [description]
+        """
         # eqn (17)
         # NOTE: since the mean of the error state is initialized to 0 this return always zero
         # is useful only when dx is initialized with a different mean
@@ -275,17 +325,25 @@ class Navigator:
         -------
         dt must match the one used to update F
         """
-        self.P = self.F.dot(self.P.dot(self.F.T)) + self.Gamma_n.dot((self.Q*dt**2).dot(self.Gamma_n.T))
-        return self.P
+        self.P = self.F.dot(self.P.dot(self.F.T)) + self.Gamma_n.dot((self.Q).dot(self.Gamma_n.T))
+        return self.P.copy()
     
-    def update_epsilon_innovation(self):
+    def update_epsilon_innovation(self, hold=False):
         """calculate the innovation, eqn(22)\n
         Remember to call UWB_measurement and predict_dx_error_state before
+        
+        Parameters
+        ----------
+        hold : [bool]
+            whether to change the last value in place, set to True when calling outlier correction, by default False
         """
         epsilon_new = np.reshape((self.z - self.H.dot(self.dxapp)),(1,6))
         self.epsilon = np.append(self.epsilon, epsilon_new, axis=0) # append new value as last
-        self.epsilon = np.delete(self.epsilon, 0, 0) # remove first value
-        return self.epsilon
+        if not hold:
+            self.epsilon = np.delete(self.epsilon, 0, 0) # remove first value
+        else:
+            self.epsilon = np.delete(self.epsilon, -2, 0) # remove outlier value
+        return self.epsilon.copy()
     
     def set_sliding_window_properties(self,a,l):
         # parameters for computing sigma in eqn (36)
@@ -295,19 +353,27 @@ class Navigator:
         for i in range(self.l_par):
             self.sigma[i] = self.a_par**((self.l_par-1)-i) * (1-self.a_par)/(1-self.a_par**self.l_par)
 
+    def update_S_theoretical_innovation_covariance(self):
+        # eqn (23)
+        self.S = self.H.dot(self.P.dot(self.H.T)) + self.R
+        return self.Sn.copy()
+
     def update_Sn_estimated_innovation_covariance(self):
         # eqn (36)
         for i in range(self.l_par):
             self.Sn = self.sigma[i]*((np.reshape(self.epsilon[i,:],(1,6))).T).dot(np.reshape(self.epsilon[i,:],(1,6)))
-        return self.Sn
+        return self.Sn.copy()
 
     def update_Rn_theoretical_estimated_MNC(self):
         # eqn (25)
+        epsilon_k = np.reshape(self.epsilon[-1,:],(1,6))
+        # self.Rn = (
+        #     self.Sn - self.H.dot(self.P.dot(self.H.T))
+        # )
         self.Rn = (
-            ((np.reshape(self.epsilon[-1,:],(1,6))).T).dot(np.reshape(self.epsilon[-1,:],(1,6)))
-            - self.H.dot(self.P.dot(self.H.T))
+            (epsilon_k.T).dot(epsilon_k) - self.H.dot(self.P.dot(self.H.T))
         )
-        return self.Rn
+        return self.Rn.copy()
     
     def fuzzy_setup(self):
         self.rfuzzy = ctrl.Antecedent(np.arange(0,0.8,0.1),'rfuzzy')
@@ -345,7 +411,7 @@ class Navigator:
         self.dk = (self.lamb_par-self.b_par)/(self.lamb_par - self.b_par**(self.iterations+1))
         a = (self.sfz **self.alpha_par) * self.dk
         self.R = (1-a)*self.R + a*self.Rn
-        return self.R
+        return self.R.copy()
 
     def update_D_theoretical_zzT_expectation(self):
         # eqns (33 and 32)
@@ -354,12 +420,12 @@ class Navigator:
             + self.H.dot(dxapp_column.dot(dxapp_column.T.dot(self.H.T)))
         )
         self.E_zkzk = self.D + self.Sn
-        return self.D
+        return self.D.copy()
     
     def check_for_outlier(self):
         #eqns (34 & 35)
         outlier = False
-        Mk = np.diagonal(self.E_zkzk)/np.diagonal(self.D)
+        Mk = np.abs(np.diagonal(self.E_zkzk)/np.diagonal(self.D))
         Mk_sqrt = np.sqrt(Mk)
         Fk = np.eye(Mk.shape[0])
         for i in range(Fk.shape[0]):
@@ -403,9 +469,11 @@ class Navigator:
     
     def generate_INS_measurement(self,a_real,w_real):
         #add real noise to the real state, that should be passed as an input
-        a_mes = a_real + np.random.normal(loc=0.0,scale=self.sigma_INS[0],size=(3,))
-        w_mes = w_real + np.random.normal(loc=0.0,scale=self.sigma_INS[1],size=(3,))
-        return a_mes,w_mes
+        self.am_prev = self.am.copy()
+        self.wm_prev = self.wm.copy()
+        self.am = a_real #+ np.random.normal(loc=0.0,scale=self.sigma_INS[0],size=(3,))
+        self.wm = w_real + np.random.normal(loc=0.0,scale=self.sigma_INS[1],size=(3,))
+        return self.am.copy(),self.wm.copy()
     
     def generate_UWB_measurement(self,pos,outlier=False):
         # pos = real position, passed as a numpy array
@@ -480,15 +548,18 @@ class Unicycle_State:
         self.vd = vd
         self.wd = wd
     def return_as_3D_with_quat(self):
-        pass
+        p = np.append(self.p, 0.) # append z position
+        v = self.v * np.array((np.cos(self.theta), np.sin(self.theta), 0.))
+        q = quat.from_rotation_vector(self.theta * np.array((0,0,1))) # rotation is only along the z-axis (2D model)
+        w = np.array((0.,0.,self.w))
 
 
         
 class Unicycle(Unicycle_State):
     # based on the equations reported in the notes by Prof. A.Bicchi, Nonlinear Systems, pag.86
-    def __init__(self,sigma,UWB_anchors_pos, a, l, lamb, b, alpha, zeta):
+    def __init__(self,sigma_INS, sigma_UWB,UWB_anchors_pos, a, l, lamb, b, alpha, zeta):
         super().__init__()
-        self.navig = Navigator(sigma,UWB_anchors_pos, a, l, lamb, b, alpha, zeta)
+        self.navig = Navigator(sigma_INS, sigma_UWB, UWB_anchors_pos, a, l, lamb, b, alpha, zeta)
         self.m = 2.
         self.Iz = 0.005 #like a 0.1m radius disk
         self.tau_v = 0.
