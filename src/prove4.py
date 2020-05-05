@@ -80,6 +80,19 @@ for step in range(steps):
     error_uni_ta[step,:] = uni.e 
     state_uni_ta[step,:2]= uni.p
     state_uni_ta[step,2]= uni.theta
+
+    # Save frame
+    # unicy.draw_artists(fig_anim,ax_anim)
+    # plt.plot(p_des_time_array[:,0],p_des_time_array[:,1],figure=fig_anim, color="xkcd:salmon")
+    # ax_anim.set_aspect('equal')
+    # ax_anim.set(xlim=(-3, 3), ylim=(-3, 3))
+    # ax_anim.set_title("Straight trajectory tracking")
+    # fig_anim.canvas.draw()
+    # img = np.frombuffer(fig_anim.canvas.tostring_rgb(), dtype='uint8')
+    # img  = img.reshape(fig_anim.canvas.get_width_height()[::-1]+(3,))
+    # writer.append_data(img)
+    # ax_anim.clear()
+    
     # End step operations
     uni.step_simulation(dt,tau_v,tau_th)
     #uni.navig.iterations += 1

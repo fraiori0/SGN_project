@@ -137,4 +137,6 @@ dmypy.json
 #OTHER
 .videos
 videos/
+.video
+video/
 

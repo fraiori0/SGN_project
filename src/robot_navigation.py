@@ -552,6 +552,7 @@ class Unicycle_State:
         v = self.v * np.array((np.cos(self.theta), np.sin(self.theta), 0.))
         q = quat.from_rotation_vector(self.theta * np.array((0,0,1))) # rotation is only along the z-axis (2D model)
         w = np.array((0.,0.,self.w))
+        return p,v,q,w
 
 
         
