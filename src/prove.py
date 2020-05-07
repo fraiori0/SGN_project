@@ -6,8 +6,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 import robot_navigation as rnav
 from math import pi as pi
+import os
 
 matplotlib.use('TkAgg')
+parentDirectory = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
 
 ###
 uwb_anchors_pos = np.array([
@@ -51,8 +53,9 @@ for i in range(steps):
     navig.INS_predict_x_INS(dt,am_data,wm_data)
     #
     navig.UWB_measurement(dt,UWB_data)
+    navig.compute_z()
     #
-    navig.update_Q(dt)
+    navig.update_Q(dt)#navig.update_Q_TMP(dt)
     navig.update_F(dt,navig.am_prev.copy(),navig.wm_prev.copy())
     ###navig.predict_dx_error_state()
     navig.predict_P_error_state_covariance(dt)

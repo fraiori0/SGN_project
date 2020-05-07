@@ -29,7 +29,7 @@ def rotate_vector(q,v):
     return v + 2*np.cross(r,(s*v + np.cross(r,v)))
 
 def vec_to_0quat(v):
-    #v is supposed to be a np.array row vector with shape (3,)
+    #v is supposed to be a np.array with shape (3,)
     return quat.as_quat_array(np.insert(v,0,0.))
 
 def skew(v):
@@ -56,19 +56,19 @@ class Navigator_State:
         self.q = q0
         self.ab = ab0
         self.wb = w0
-    def backward_euler(self,dt,vd,qd,abd,wd):
+    def backward_euler(self,dt,vd,qd,abd,wbd):
         self.p += dt*self.v
         self.v += dt*vd
-        self.q = (self.q+(dt*qd)).normalized()
+        self.q = (self.q + (qd * dt)).normalized()
         self.ab += dt*abd
-        self.wb += dt*wd
+        self.wb += dt*wbd
     def as_array_15(self):
         #return as an array, including only the vector component of the quaternion
         return np.array((*self.p, *self.v, *(self.q.vec), *self.ab, * self.wb))
         
 
 class Navigator:
-    def __init__(self,sigma_INS,sigma_UWB,UWB_anchors_pos, a, l, lamb, b, alpha, zeta, MNCsigma=0.1):
+    def __init__(self,sigma_INS,sigma_UWB,UWB_anchors_pos, a, l, lamb, b, alpha, zeta, MNCsigma=0.0136):
         """Init class object
 
         Parameters
@@ -150,7 +150,7 @@ class Navigator:
         am : np.array(3,float)
             measured acceleration in body-frame (output of INS accelerometer)\n
         wm : np.array(3,float)
-            measured angular speed (output of INS gyroscope)
+            measured angular speed in body-frame (output of INS gyroscope)
 
         Returns
         -------
@@ -203,15 +203,12 @@ class Navigator:
         b_add = (UWB_data[1:]**2)-(UWB_data[0]**2)
         self.pmUWB = (sp.linalg.pinv(self.G).dot(b_add + self.b_precomp))/2.
         self.vmUWB = (self.pmUWB-self.pmUWB_prev)/dt 
-        self.z = np.array((*(self.pmUWB-self.xn.p), *(self.vmUWB-self.xn.v)))
-        #self.z = np.array((*(self.pmUWB-self.x_INS.p), *(self.vmUWB-self.x_INS.v)))
         return self.pmUWB.copy(), self.vmUWB.copy()
     
     def compute_z(self):
-        # alternative computation of z?
-        # for this I should already know the actual error covariance, which I'm trying to estimate
-        #self.z = self.H.dot(self.dxapp) + np.random.normal(loc=0.0,scale=?,size=(6,))
-        pass
+        # self.z = np.array((*(self.pmUWB-self.xn.p), *(self.vmUWB-self.xn.v)))
+        self.z = np.array((*(self.pmUWB-self.x_INS.p), *(self.vmUWB-self.x_INS.v)))
+        return self.z.copy()
 
     def INS_predict_xn_nominal_state(self,dt,am,wm):
         """Predict the nominal state with INS measurement
@@ -231,11 +228,11 @@ class Navigator:
             nominal state of the robot
         """
         # store previous state
-        self.xn_prev.p=self.xn.p
-        self.xn_prev.v=self.xn.v
-        self.xn_prev.q=self.xn.q
-        self.xn_prev.ab=self.xn.ab
-        self.xn_prev.wb=self.xn.wb
+        self.xn_prev.p=self.xn.p.copy()
+        self.xn_prev.v=self.xn.v.copy()
+        self.xn_prev.q=self.xn.q.copy()
+        self.xn_prev.ab=self.xn.ab.copy()
+        self.xn_prev.wb=self.xn.wb.copy()
         # predict
         derivatives = self.compute_xnd(am,wm)
         self.xn.backward_euler(dt,*derivatives)
@@ -367,12 +364,12 @@ class Navigator:
     def update_Rn_theoretical_estimated_MNC(self):
         # eqn (25)
         epsilon_k = np.reshape(self.epsilon[-1,:],(1,6))
-        # self.Rn = (
-        #     self.Sn - self.H.dot(self.P.dot(self.H.T))
-        # )
         self.Rn = (
-            (epsilon_k.T).dot(epsilon_k) - self.H.dot(self.P.dot(self.H.T))
+            self.Sn - self.H.dot(self.P.dot(self.H.T))
         )
+        # self.Rn = (
+        #     (epsilon_k.T).dot(epsilon_k) - self.H.dot(self.P.dot(self.H.T))
+        # )
         return self.Rn.copy()
     
     def fuzzy_setup(self):
@@ -471,7 +468,7 @@ class Navigator:
         #add real noise to the real state, that should be passed as an input
         self.am_prev = self.am.copy()
         self.wm_prev = self.wm.copy()
-        self.am = a_real #+ np.random.normal(loc=0.0,scale=self.sigma_INS[0],size=(3,))
+        self.am = a_real + np.random.normal(loc=0.0,scale=self.sigma_INS[0],size=(3,))
         self.wm = w_real + np.random.normal(loc=0.0,scale=self.sigma_INS[1],size=(3,))
         return self.am.copy(),self.wm.copy()
     
@@ -543,16 +540,25 @@ class Unicycle_State:
     def update_state_Euler(self,dt,vd,wd):
         self.p += self.v * dt * np.array((np.cos(self.theta), np.sin(self.theta)))
         self.v += self.vd * dt
-        self.theta += (self.w * dt)/(2*pi)
+        self.theta = (self.theta + (self.w * dt))%(2*pi)
         self.w += wd * dt
         self.vd = vd
         self.wd = wd
+    def update_state_Euler_KIN(self,dt,v,w):
+        self.vd = (v-self.v)/dt
+        self.wd = (w-self.w)/dt
+        self.v = v
+        self.w = w
+        self.p += self.v * dt * np.array((np.cos(self.theta), np.sin(self.theta)))
+        self.theta = (self.theta + (self.w * dt))%(2*pi)
     def return_as_3D_with_quat(self):
         p = np.append(self.p, 0.) # append z position
         v = self.v * np.array((np.cos(self.theta), np.sin(self.theta), 0.))
         q = quat.from_rotation_vector(self.theta * np.array((0,0,1))) # rotation is only along the z-axis (2D model)
         w = np.array((0.,0.,self.w))
-        return p,v,q,w
+        vd = self.vd * np.array((np.cos(self.theta), np.sin(self.theta), 0.)) + skew(w).dot(v) #Poisson relation
+        wd = np.array((0.,0.,self.wd))
+        return p,v,q,w,vd,wd
 
 
         
@@ -577,6 +583,9 @@ class Unicycle(Unicycle_State):
         vd = tau_v /self.m
         wd = tau_th/self.Iz
         self.update_state_Euler(dt,vd,wd)
+    
+    def step_simulation_KIN(self,dt,vc,wc):
+        self.update_state_Euler_KIN(dt,vc,wc)
     
     def set_backstepping_gains(self, k1, lamb1,lamb2,kbv,kbw):
         self.k1 = k1 #k of eqn. (3.67)

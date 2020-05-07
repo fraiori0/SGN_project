@@ -103,6 +103,7 @@ for step in range(int(t_tot/dt)):
     state_time_array[step,2]= unicy.theta
     #unicy.step_simulation(dt,0.1,0.001)
     unicy.step_simulation(dt,tau_v,tau_th)
+    
     ###
     # unicy.draw_artists(fig_anim,ax_anim)
     # plt.plot(p_des_time_array[:,0],p_des_time_array[:,1],figure=fig_anim, color="xkcd:salmon")

@@ -69,9 +69,9 @@ uwb_anchors_pos = np.array([
     [1.,5.,0.],
     [-5,5.,0.],
 ]) # positions of the UWB tags
-sigma_UWB = 0.1
+sigma_UWB = (0.1)
 sigma_INS = np.array([0.06,0.06])
-a = 0.98 #sliding window fading coefficient, usually [0.95,0.99]
+a = 0.999 #sliding window fading coefficient, usually [0.95,0.99]
 l = 100 #sliding window length
 lamb = 1.3 # >1, parameter for the R innovation contribution weight
 b = 0.96 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
@@ -80,7 +80,7 @@ zeta = 3. #outliers detection treshold
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
 uni.set_backstepping_gains(4,10,10,20,20)
-v_uni_kin = 0.2
+v_uni_kin = 0.4
 w_uni_kin = 0.1
 # Initial values 
 # uni.set_state(p_des_uni_ta[0],v_uni_kin,theta_des_uni_ta[0],w_uni_kin,0.,0.)
@@ -137,6 +137,7 @@ for step in range(steps):
     if INSbool:
         am_data,wm_data = uni.navig.generate_INS_measurement(vd_body,w_body)
         uni.navig.INS_predict_xn_nominal_state(dt_INS,am_data,wm_data)
+        uni.navig.INS_predict_x_INS(dt,am_data,wm_data)
     if UWBbool:
         UWB_data = uni.navig.generate_UWB_measurement(p)
         uni.navig.UWB_measurement(dt_UWB,UWB_data)
@@ -150,7 +151,7 @@ for step in range(steps):
         #
         uni.navig.update_epsilon_innovation()
         uni.navig.update_S_theoretical_innovation_covariance()
-        # uni.navig.update_Sn_estimated_innovation_covariance()
+        uni.navig.update_Sn_estimated_innovation_covariance()
         # uni.navig.update_D_theoretical_zzT_expectation()
         # outlier_detected = uni.navig.check_for_outlier()
         ##while or only an if?
@@ -163,8 +164,10 @@ for step in range(steps):
         # Fuzzy filter
         # uni.navig.apply_fuzzy_filter()
         # Estimate Measurement Noise Covariance
-        # uni.navig.update_Rn_theoretical_estimated_MNC()
-        # uni.navig.update_R_estimated_MNC()
+        uni.navig.update_Rn_theoretical_estimated_MNC()
+        #uni.navig.R = uni.navig.Rn.copy()
+        print(np.round(uni.navig.Sn,4))
+        uni.navig.update_R_estimated_MNC()
         # Compute Kalman Gain and Update error state
         uni.navig.update_Kalman_gain()
         uni.navig.update_dx_and_P()
