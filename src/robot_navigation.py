@@ -104,7 +104,7 @@ class Navigator:
         self.g = np.array([0.,0.,-9.81])
         self.xn = Navigator_State() #nominal state
         self.xn_prev = Navigator_State() #previous instance of the nominal state (used for F?)
-        self.x_INS = Navigator_State() # state updated only by the INS measurements, no correction of any type
+        self.x_INS = Navigator_State() # state updated only by the INS measurements, no correction of any type (dead reckoning)
         self.dx = Navigator_State() #error state
         self.dxapp = np.zeros((15,)) #error state with approximate rotation (\delta x in the paper) (p,v,q,ab,wb)
         self.am_prev = np.array((0.,0.,0.))
@@ -162,6 +162,26 @@ class Navigator:
         anbd = 0.
         wnbd = 0.
         return (vnd,qnd,anbd,wnbd)
+    def compute_x_INSd(self,am,wm):
+        """derivative of the INS-only state, dead-reckoning
+
+        Parameters
+        ----------
+        am : np.array(3,float)
+            measured acceleration in body-frame (output of INS accelerometer)\n
+        wm : np.array(3,float)
+            measured angular speed in body-frame (output of INS gyroscope)
+
+        Returns
+        -------
+        (vnd,qnd,anbd,wnbd)
+            derivatives, to be passed when calling self.x_INS.backward_euler()
+        """
+        vnd = rotate_vector(self.x_INS.q, (am-self.x_INS.ab))# + self.g 
+        qnd = (self.x_INS.q * vec_to_0quat(wm-self.x_INS.wb))/2.
+        anbd = 0.
+        wnbd = 0.
+        return (vnd,qnd,anbd,wnbd)
 
     def set_G(self):
         """Set self.G based on the given absolute position of the UWB anchors (eqn(11) of the paper)
@@ -206,8 +226,8 @@ class Navigator:
         return self.pmUWB.copy(), self.vmUWB.copy()
     
     def compute_z(self):
-        # self.z = np.array((*(self.pmUWB-self.xn.p), *(self.vmUWB-self.xn.v)))
-        self.z = np.array((*(self.pmUWB-self.x_INS.p), *(self.vmUWB-self.x_INS.v)))
+        self.z = np.array((*(self.pmUWB-self.xn.p), *(self.vmUWB-self.xn.v)))
+        #self.z = np.array((*(self.pmUWB-self.x_INS.p), *(self.vmUWB-self.x_INS.v)))
         return self.z.copy()
 
     def INS_predict_xn_nominal_state(self,dt,am,wm):
@@ -255,7 +275,7 @@ class Navigator:
             nominal state of the robot
         """
         # predict
-        derivatives = self.compute_xnd(am,wm)
+        derivatives = self.compute_x_INSd(am,wm)
         self.x_INS.backward_euler(dt,*derivatives)
 
     def update_Q(self,dt):
