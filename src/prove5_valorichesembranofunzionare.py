@@ -72,11 +72,11 @@ uwb_anchors_pos = np.array([
 ]) # positions of the UWB tags
 sigma_UWB = (0.1)
 sigma_INS = np.array([0.06,0.06])
-a = 0.999 #sliding window fading coefficient, usually [0.95,0.99]
+a = 0.9999 #sliding window fading coefficient, usually [0.95,0.99]
 l = 30 #sliding window length
-lamb = 1.1 # >1, parameter for the R innovation contribution weight
+lamb = 1.001 # >1, parameter for the R innovation contribution weight
 b = 0.999 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
-alpha = 0.1 #secondary regulatory factor for R innovation
+alpha = 0.5 #secondary regulatory factor for R innovation
 zeta = 3. #outliers detection treshold
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
@@ -243,17 +243,18 @@ for step in range(steps):
 # axs_uni[1,0].set_title("Desired")
 # handles_uni, labels_uni = axs_uni[0,0].get_legend_handles_labels()
 # fig_uni.legend(handles_uni, labels_uni, loc='center right')
+
 ### Trajectory
-fig_trj,axs_trj = plt.subplots()
-axs_trj.plot(state_uni_ta[:,0],state_uni_ta[:,1],color="xkcd:teal", label="Real")
-#axs_trj[0].plot(p_des_uni_ta[:,0],p_des_uni_ta[:,1],color="salmon", label="desired")
-axs_trj.plot(p_navig_ta[:,0],p_navig_ta[:,1],color="xkcd:salmon", label="Estimated")
-axs_trj.plot(p_INS_ta[:,0],p_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
-axs_trj.plot(p_UWB_ta[:,0],p_UWB_ta[:,1],color="xkcd:orange", label="UWB", marker="1", linestyle="None")
-axs_trj.set_title("Trajectory [x-y]")
-axs_trj.set_aspect('equal')
-handles_trj, labels_trj = axs_trj.get_legend_handles_labels()
-fig_trj.legend(handles_trj, labels_trj, loc='center right')
+# fig_trj,axs_trj = plt.subplots()
+# axs_trj.plot(state_uni_ta[:,0],state_uni_ta[:,1],color="xkcd:teal", label="Real")
+# #axs_trj[0].plot(p_des_uni_ta[:,0],p_des_uni_ta[:,1],color="salmon", label="desired")
+# axs_trj.plot(p_navig_ta[:,0],p_navig_ta[:,1],color="xkcd:salmon", label="Estimated")
+# axs_trj.plot(p_INS_ta[:,0],p_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
+# axs_trj.plot(p_UWB_ta[:,0],p_UWB_ta[:,1],color="xkcd:orange", label="UWB", marker="1", linestyle="None")
+# axs_trj.set_title("Trajectory [x-y]")
+# axs_trj.set_aspect('equal')
+# handles_trj, labels_trj = axs_trj.get_legend_handles_labels()
+# fig_trj.legend(handles_trj, labels_trj, loc='center right')
 
 ### Navigation 
 UNI_ta = np.linspace(0,t_tot,state_uni_ta.shape[0])
