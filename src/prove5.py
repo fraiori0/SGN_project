@@ -15,11 +15,11 @@ parentDirectory = os.path.abspath(os.getcwd())
 
 ### SIMULATION PARAMETERS
 #########################
-dt = 1./200.
+dt = 1./100.
 dt_INS = 1./100.
 dt_UWB = 1./5.
 dt_video = 1/20. 
-t_tot = 50.
+t_tot = 80.
 steps = int(t_tot/dt)
 steps_INS = int(t_tot/dt_INS)
 steps_UWB = int(t_tot/dt_UWB)
@@ -73,26 +73,26 @@ uwb_anchors_pos = np.array([
 sigma_UWB = (0.1)
 sigma_INS = np.array([0.06,0.06])
 a = 0.9999 #sliding window fading coefficient, usually [0.95,0.99]
-l = 30 #sliding window length
-lamb = 1.0001 # >1, parameter for the R innovation contribution weight
+l = 60 #sliding window length
+lamb = 1.1 # >1, parameter for the R innovation contribution weight
 b = 0.999 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
-alpha = 0.5 #secondary regulatory factor for R innovation
-zeta = 3. #outliers detection treshold
+alpha = 0.8 #secondary regulatory factor for R innovation
+zeta = 10. #outliers detection treshold
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
 uni.set_backstepping_gains(4,10,10,20,20)
-v_uni_kin = 0.4
-w_uni_kin = 0.1
+v_uni_kin = 0.2
+w_uni_kin = 0.05
 # Initial values 
 # uni.set_state(p_des_uni_ta[0],v_uni_kin,theta_des_uni_ta[0],w_uni_kin,0.,0.)
 uni.set_state(p_des_uni_ta[0],v_uni_kin,pi,w_uni_kin,0.,0.)
 p0,v0,q0,w0,vd0,wd0 = uni.return_as_3D_with_quat()
-uni.navig.xn.p = p0.copy()
+uni.navig.xn.p = p0.copy()#+np.array((0.5,0.5,0.))
 uni.navig.xn.v = v0.copy()
 uni.navig.xn.q = q0.copy()
-uni.navig.x_INS.p = p0.copy()
-uni.navig.x_INS.v = v0.copy()
-uni.navig.x_INS.q = q0.copy()
+uni.navig.x_INS.p = uni.navig.xn.p.copy()
+uni.navig.x_INS.v = uni.navig.xn.v.copy()
+uni.navig.x_INS.q = uni.navig.xn.q.copy()
 
 
 ### DATA STORAGE and video
@@ -144,10 +144,12 @@ for step in range(steps):
     # FILTER #
     ##########
     if INSbool:
+        # INS prediction
         am_data,wm_data = uni.navig.generate_INS_measurement(vd_body,w_body)
         uni.navig.INS_predict_xn_nominal_state(dt_INS,am_data,wm_data)
         uni.navig.INS_predict_x_INS(dt_INS,am_data,wm_data)
     if UWBbool:
+        # UWB measurement
         UWB_data = uni.navig.generate_UWB_measurement(p)
         uni.navig.UWB_measurement(dt_UWB,UWB_data)
         uni.navig.compute_z()
@@ -157,21 +159,22 @@ for step in range(steps):
         uni.navig.update_F(dt_UWB,uni.navig.am_prev.copy(),uni.navig.wm_prev.copy())
         ###uni.navig.predict_dx_error_state()
         uni.navig.predict_P_error_state_covariance(dt_UWB)
-        #
+        # Update innovation
         uni.navig.update_epsilon_innovation()
         uni.navig.update_S_theoretical_innovation_covariance()
         uni.navig.update_Sn_estimated_innovation_covariance()
-        # uni.navig.update_D_theoretical_zzT_expectation()
-        # outlier_detected = uni.navig.check_for_outlier()
+        # Outlier detection
+        uni.navig.update_D_theoretical_zzT_expectation()
+        outlier_detected = uni.navig.check_for_outlier()
         ##while or only an if?
-        # while (outlier_detected):
-        #     print("DETECTED")
-        #     uni.navig.update_epsilon_innovation(hold=True)
-        #     uni.navig.update_Sn_estimated_innovation_covariance()
-        #     uni.navig.update_D_theoretical_zzT_expectation()
-        #     outlier_detected = uni.navig.check_for_outlier()
+        if (outlier_detected):
+            print("DETECTED")
+            uni.navig.update_epsilon_innovation(hold=True)
+            uni.navig.update_Sn_estimated_innovation_covariance()
+            uni.navig.update_D_theoretical_zzT_expectation()
+            outlier_detected = uni.navig.check_for_outlier()
         # Fuzzy filter
-        # uni.navig.apply_fuzzy_filter()
+        uni.navig.apply_fuzzy_filter()
         # Estimate Measurement Noise Covariance
         uni.navig.update_Rn_theoretical_estimated_MNC()
         #uni.navig.R = uni.navig.Rn.copy()
