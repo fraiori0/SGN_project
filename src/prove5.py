@@ -19,7 +19,7 @@ dt = 1./100.
 dt_INS = 1./100.
 dt_UWB = 1./5.
 dt_video = 1/20. 
-t_tot = 80.
+t_tot = 50.
 steps = int(t_tot/dt)
 steps_INS = int(t_tot/dt_INS)
 steps_UWB = int(t_tot/dt_UWB)
@@ -68,21 +68,21 @@ uwb_anchors_pos = np.array([
     [-5.,-1.,0.],
     [1.,-1.,0.],
     [1.,5.,0.],
-    [-5,5.,0.],
+    [-5,5.,0.]
 ]) # positions of the UWB tags
 sigma_UWB = (0.1)
 sigma_INS = np.array([0.06,0.06])
 a = 0.9999 #sliding window fading coefficient, usually [0.95,0.99]
-l = 60 #sliding window length
-lamb = 1.1 # >1, parameter for the R innovation contribution weight
+l = 7 #sliding window length
+lamb = 1.00001 # >1, parameter for the R innovation contribution weight
 b = 0.999 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
-alpha = 0.8 #secondary regulatory factor for R innovation
-zeta = 10. #outliers detection treshold
+alpha = 0.4 #secondary regulatory factor for R innovation
+zeta = 5000. #outliers detection treshold
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
 uni.set_backstepping_gains(4,10,10,20,20)
-v_uni_kin = 0.2
-w_uni_kin = 0.05
+v_uni_kin = 0.4
+w_uni_kin = 0.1
 # Initial values 
 # uni.set_state(p_des_uni_ta[0],v_uni_kin,theta_des_uni_ta[0],w_uni_kin,0.,0.)
 uni.set_state(p_des_uni_ta[0],v_uni_kin,pi,w_uni_kin,0.,0.)
@@ -101,7 +101,7 @@ uni.navig.x_INS.q = uni.navig.xn.q.copy()
 if save_video:
     fig_anim = plt.figure()
     ax_anim = fig_anim.add_subplot(111)
-    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/prova_video_circle.mp4"), fps=int(1/dt))
+    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/prova_video_2.mp4"), fps=int(1/dt_video))
 error_uni_ta=np.zeros((steps,3))
 state_uni_ta=np.zeros((steps,3))
 state_d_uni_ta=np.zeros((steps,3))
@@ -137,8 +137,13 @@ for step in range(steps):
     w_body = R_bg.dot(w)
 
     # Sub-system timing
-    INSbool = not (step % int(dt_INS/dt))
+    INSbool = not (step % int(dt_INS/dt)) #module division
     UWBbool = not (step % int(dt_UWB/dt))
+    video_bool = not (step % int(dt_video/dt))
+    step_video= step // int(dt_video/dt) #floor division
+    step_INS = step // int(dt_INS/dt)
+    step_UWB = step // int(dt_UWB/dt)
+    print('%f' %(np.round(100*step/steps, 1)))
 
     ##########
     # FILTER #
@@ -205,13 +210,19 @@ for step in range(steps):
 
     # Save frame
     if save_video:
-        if not (step % int(dt_video/dt)):
+        if video_bool:
+            pass
             uni.draw_artists(fig_anim,ax_anim)
-            plt.plot(p_des_uni_ta[:(i-1),0],p_des_uni_ta[:(i-1),1],figure=fig_anim, color="xkcd:teal")
-            plt.plot(state_uni_ta[:(i-1),0],state_uni_ta[:(i-1),1],figure=fig_anim, color="xkcd:salmon")
+            #plt.plot(p_des_uni_ta[:(step-1),0],p_des_uni_ta[:(step-1),1],figure=fig_anim, color="xkcd:light teal")
+            plt.plot(state_uni_ta[:step,0],state_uni_ta[:step,1],color="xkcd:teal", label="Real")
+            plt.plot(p_navig_ta[:step_INS,0],p_navig_ta[:step_INS,1],color="xkcd:salmon", label="Estimated")
+            plt.plot(p_INS_ta[:step_INS,0],p_INS_ta[:step_INS,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
+            plt.plot(p_UWB_ta[:step_UWB,0],p_UWB_ta[:step_UWB,1],color="xkcd:orange", label="UWB", marker="1", linestyle="None")
             ax_anim.set_aspect('equal')
-            ax_anim.set(xlim=(-1, 1), ylim=(-1, 1))
-            ax_anim.set_title("Straight trajectory tracking")
+            x_lim_TMP = (state_uni_ta[step_INS,0]-1,state_uni_ta[step_INS,0]+1)
+            y_lim_TMP = (state_uni_ta[step_INS,1]-1,state_uni_ta[step_INS,1]+1)
+            ax_anim.set(xlim=x_lim_TMP, ylim=y_lim_TMP)
+            ax_anim.set_title("Position estimation")
             fig_anim.canvas.draw()
             img = np.frombuffer(fig_anim.canvas.tostring_rgb(), dtype='uint8')
             img  = img.reshape(fig_anim.canvas.get_width_height()[::-1]+(3,))
@@ -248,22 +259,22 @@ for step in range(steps):
 # fig_uni.legend(handles_uni, labels_uni, loc='center right')
 
 ### Trajectory
-# fig_trj,axs_trj = plt.subplots()
-# axs_trj.plot(state_uni_ta[:,0],state_uni_ta[:,1],color="xkcd:teal", label="Real")
-# #axs_trj[0].plot(p_des_uni_ta[:,0],p_des_uni_ta[:,1],color="salmon", label="desired")
-# axs_trj.plot(p_navig_ta[:,0],p_navig_ta[:,1],color="xkcd:salmon", label="Estimated")
-# axs_trj.plot(p_INS_ta[:,0],p_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
-# axs_trj.plot(p_UWB_ta[:,0],p_UWB_ta[:,1],color="xkcd:orange", label="UWB", marker="1", linestyle="None")
-# axs_trj.set_title("Trajectory [x-y]")
-# axs_trj.set_aspect('equal')
-# handles_trj, labels_trj = axs_trj.get_legend_handles_labels()
-# fig_trj.legend(handles_trj, labels_trj, loc='center right')
+fig_trj,axs_trj = plt.subplots()
+axs_trj.plot(state_uni_ta[:,0],state_uni_ta[:,1],color="xkcd:teal", label="Real")
+#axs_trj[0].plot(p_des_uni_ta[:,0],p_des_uni_ta[:,1],color="salmon", label="desired")
+axs_trj.plot(p_navig_ta[:,0],p_navig_ta[:,1],color="xkcd:salmon", label="Estimated")
+axs_trj.plot(p_INS_ta[:,0],p_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
+axs_trj.plot(p_UWB_ta[:,0],p_UWB_ta[:,1],color="xkcd:orange", label="UWB", marker="1", linestyle="None")
+axs_trj.set_title("Trajectory [x-y]")
+axs_trj.set_aspect('equal')
+handles_trj, labels_trj = axs_trj.get_legend_handles_labels()
+fig_trj.legend(handles_trj, labels_trj, loc='center right')
 
 ### Navigation 
 UNI_ta = np.linspace(0,t_tot,state_uni_ta.shape[0])
 INS_ta = np.linspace(0,t_tot,p_navig_ta.shape[0])
 UWB_ta = np.linspace(0,t_tot,p_UWB_ta.shape[0])
-fig_nav,axs_nav = plt.subplots(2,3)
+fig_nav,axs_nav = plt.subplots(2,2)
 axs_nav[0,0].plot(UNI_ta,state_uni_ta[:,0],color="xkcd:teal", label="actual")
 axs_nav[0,0].plot(INS_ta,p_navig_ta[:,0],color="xkcd:salmon", label="estimated")
 axs_nav[0,0].plot(INS_ta,p_INS_ta[:,0],color="xkcd:light salmon", label="INS only (dead reckoning)")
@@ -274,9 +285,9 @@ axs_nav[0,1].plot(INS_ta,p_navig_ta[:,1],color="xkcd:salmon", label="estimated")
 axs_nav[0,1].plot(INS_ta,p_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
 axs_nav[0,1].plot(UWB_ta,p_UWB_ta[:,1],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
 axs_nav[0,1].set_title("Y")
-axs_nav[0,2].plot(UNI_ta,state_uni_ta[:,2],color="xkcd:teal", label="actual")
-axs_nav[0,2].plot(INS_ta,th_navig_ta,color="xkcd:salmon", label="estimated")
-axs_nav[0,2].set_title("Theta")
+# axs_nav[0,2].plot(UNI_ta,state_uni_ta[:,2],color="xkcd:teal", label="actual")
+# axs_nav[0,2].plot(INS_ta,th_navig_ta,color="xkcd:salmon", label="estimated")
+# axs_nav[0,2].set_title("Theta")
 axs_nav[1,0].plot(UNI_ta,state_d_uni_ta[:,0],color="xkcd:teal", label="actual")
 axs_nav[1,0].plot(INS_ta,v_navig_ta[:,0],color="xkcd:salmon", label="estimated")
 axs_nav[1,0].plot(INS_ta,v_INS_ta[:,0],color="xkcd:light salmon", label="INS only (dead reckoning)")
@@ -287,9 +298,9 @@ axs_nav[1,1].plot(INS_ta,v_navig_ta[:,1],color="xkcd:salmon", label="estimated")
 axs_nav[1,1].plot(INS_ta,v_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
 axs_nav[1,1].plot(UWB_ta,v_UWB_ta[:,1],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
 axs_nav[1,1].set_title("Vy")
-axs_nav[1,2].plot(UNI_ta,state_d_uni_ta[:,2],color="xkcd:teal", label="actual")
-axs_nav[1,2].plot(INS_ta,w_navig_ta,color="xkcd:salmon", label="estimated")
-axs_nav[1,2].set_title("W (ang.speed)")
+# axs_nav[1,2].plot(UNI_ta,state_d_uni_ta[:,2],color="xkcd:teal", label="actual")
+# axs_nav[1,2].plot(INS_ta,w_navig_ta,color="xkcd:salmon", label="estimated")
+# axs_nav[1,2].set_title("W (ang.speed)")
 handles_nav, labels_nav = axs_nav[0,0].get_legend_handles_labels()
 fig_nav.legend(handles_nav, labels_nav, loc='lower center')
 #
