@@ -25,7 +25,7 @@ steps = int(t_tot/dt)
 steps_INS = int(t_tot/dt_INS)
 steps_UWB = int(t_tot/dt_UWB)
 steps_out = int(t_tot/dt_out)
-
+np.random.seed
 
 ### TRAJECTORY GENERATION
 #########################
@@ -74,11 +74,11 @@ uwb_anchors_pos = np.array([
 ]) # positions of the UWB tags
 sigma_UWB = (0.1)
 sigma_INS = np.array([0.06,0.06])
-a = 0.9999 #sliding window fading coefficient, usually [0.95,0.99]
-l = 20 #sliding window length
+a = 0.99999#9 #sliding window fading coefficient, usually [0.95,0.99]
+l = 12 #sliding window length
 lamb = 1.00001 # >1, parameter for the R innovation contribution weight
-b = 0.999 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
-alpha = 0.439 #secondary regulatory factor for R innovation
+b = 0.999#9 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
+alpha = 0.434 #secondary regulatory factor for R innovation
 zeta = 52. #outliers detection treshold
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
@@ -104,7 +104,7 @@ save_video = False
 if save_video:
     fig_anim = plt.figure()
     ax_anim = fig_anim.add_subplot(111)
-    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/navigation_simulation_3.mp4"), fps=int(1/dt_video))
+    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/navigation_simulation_prova.mp4"), fps=int(1/dt_video))
 error_uni_ta=np.zeros((steps,3))
 state_uni_ta=np.zeros((steps,3))
 state_d_uni_ta=np.zeros((steps,3))
