@@ -19,7 +19,7 @@ dt = 1./100.
 dt_INS = 1./100.
 dt_UWB = 1./5.
 dt_video = 1/20. 
-t_tot = 50.
+t_tot = 30.
 steps = int(t_tot/dt)
 steps_INS = int(t_tot/dt_INS)
 steps_UWB = int(t_tot/dt_UWB)
@@ -73,7 +73,7 @@ uwb_anchors_pos = np.array([
 sigma_UWB = (0.1)
 sigma_INS = np.array([0.06,0.06])
 a = 0.9999 #sliding window fading coefficient, usually [0.95,0.99]
-l = 7 #sliding window length
+l = 10 #sliding window length
 lamb = 1.00001 # >1, parameter for the R innovation contribution weight
 b = 0.999 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
 alpha = 0.4 #secondary regulatory factor for R innovation
@@ -81,13 +81,13 @@ zeta = 5000. #outliers detection treshold
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
 uni.set_backstepping_gains(4,10,10,20,20)
-v_uni_kin = 0.4
+v_uni_kin = 0.3
 w_uni_kin = 0.1
 # Initial values 
 # uni.set_state(p_des_uni_ta[0],v_uni_kin,theta_des_uni_ta[0],w_uni_kin,0.,0.)
 uni.set_state(p_des_uni_ta[0],v_uni_kin,pi,w_uni_kin,0.,0.)
 p0,v0,q0,w0,vd0,wd0 = uni.return_as_3D_with_quat()
-uni.navig.xn.p = p0.copy()#+np.array((0.5,0.5,0.))
+uni.navig.xn.p = p0.copy()+np.array((0.5,-0.5,0.))
 uni.navig.xn.v = v0.copy()
 uni.navig.xn.q = q0.copy()
 uni.navig.x_INS.p = uni.navig.xn.p.copy()
@@ -214,10 +214,11 @@ for step in range(steps):
             pass
             uni.draw_artists(fig_anim,ax_anim)
             #plt.plot(p_des_uni_ta[:(step-1),0],p_des_uni_ta[:(step-1),1],figure=fig_anim, color="xkcd:light teal")
-            plt.plot(state_uni_ta[:step,0],state_uni_ta[:step,1],color="xkcd:teal", label="Real")
-            plt.plot(p_navig_ta[:step_INS,0],p_navig_ta[:step_INS,1],color="xkcd:salmon", label="Estimated")
-            plt.plot(p_INS_ta[:step_INS,0],p_INS_ta[:step_INS,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
             plt.plot(p_UWB_ta[:step_UWB,0],p_UWB_ta[:step_UWB,1],color="xkcd:orange", label="UWB", marker="1", linestyle="None")
+            plt.plot(state_uni_ta[:step,0],state_uni_ta[:step,1],color="xkcd:teal", label="Real")
+            plt.plot(p_navig_ta[:step_INS,0],p_navig_ta[:step_INS,1],color="xkcd:dark salmon", label="Estimated")
+            plt.plot(p_INS_ta[:step_INS,0],p_INS_ta[:step_INS,1],color="xkcd:light salmon", ls='--',label="INS only (dead reckoning)")
+            
             ax_anim.set_aspect('equal')
             x_lim_TMP = (state_uni_ta[step_INS,0]-1,state_uni_ta[step_INS,0]+1)
             y_lim_TMP = (state_uni_ta[step_INS,1]-1,state_uni_ta[step_INS,1]+1)
@@ -260,11 +261,11 @@ for step in range(steps):
 
 ### Trajectory
 fig_trj,axs_trj = plt.subplots()
-axs_trj.plot(state_uni_ta[:,0],state_uni_ta[:,1],color="xkcd:teal", label="Real")
+axs_trj.plot(p_UWB_ta[:,0],p_UWB_ta[:,1],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
 #axs_trj[0].plot(p_des_uni_ta[:,0],p_des_uni_ta[:,1],color="salmon", label="desired")
-axs_trj.plot(p_navig_ta[:,0],p_navig_ta[:,1],color="xkcd:salmon", label="Estimated")
-axs_trj.plot(p_INS_ta[:,0],p_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
-axs_trj.plot(p_UWB_ta[:,0],p_UWB_ta[:,1],color="xkcd:orange", label="UWB", marker="1", linestyle="None")
+axs_trj.plot(p_navig_ta[:,0],p_navig_ta[:,1],color="xkcd:dark salmon", label="Estimated")
+axs_trj.plot(p_INS_ta[:,0],p_INS_ta[:,1],color="xkcd:light salmon", ls='--', label="INS only (dead reckoning)")
+axs_trj.plot(state_uni_ta[:,0],state_uni_ta[:,1],color="xkcd:teal", label="Real")
 axs_trj.set_title("Trajectory [x-y]")
 axs_trj.set_aspect('equal')
 handles_trj, labels_trj = axs_trj.get_legend_handles_labels()
@@ -275,28 +276,28 @@ UNI_ta = np.linspace(0,t_tot,state_uni_ta.shape[0])
 INS_ta = np.linspace(0,t_tot,p_navig_ta.shape[0])
 UWB_ta = np.linspace(0,t_tot,p_UWB_ta.shape[0])
 fig_nav,axs_nav = plt.subplots(2,2)
-axs_nav[0,0].plot(UNI_ta,state_uni_ta[:,0],color="xkcd:teal", label="actual")
-axs_nav[0,0].plot(INS_ta,p_navig_ta[:,0],color="xkcd:salmon", label="estimated")
-axs_nav[0,0].plot(INS_ta,p_INS_ta[:,0],color="xkcd:light salmon", label="INS only (dead reckoning)")
 axs_nav[0,0].plot(UWB_ta,p_UWB_ta[:,0],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
+axs_nav[0,0].plot(INS_ta,p_navig_ta[:,0],color="xkcd:dark salmon", label="Estimated")
+axs_nav[0,0].plot(INS_ta,p_INS_ta[:,0],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
+axs_nav[0,0].plot(UNI_ta,state_uni_ta[:,0],color="xkcd:teal", label="Real")
 axs_nav[0,0].set_title("X")
-axs_nav[0,1].plot(UNI_ta,state_uni_ta[:,1],color="xkcd:teal", label="actual")
-axs_nav[0,1].plot(INS_ta,p_navig_ta[:,1],color="xkcd:salmon", label="estimated")
-axs_nav[0,1].plot(INS_ta,p_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
 axs_nav[0,1].plot(UWB_ta,p_UWB_ta[:,1],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
+axs_nav[0,1].plot(UNI_ta,state_uni_ta[:,1],color="xkcd:teal", label="Real")
+axs_nav[0,1].plot(INS_ta,p_navig_ta[:,1],color="xkcd:dark salmon", label="Estimated")
+axs_nav[0,1].plot(INS_ta,p_INS_ta[:,1],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
 axs_nav[0,1].set_title("Y")
 # axs_nav[0,2].plot(UNI_ta,state_uni_ta[:,2],color="xkcd:teal", label="actual")
 # axs_nav[0,2].plot(INS_ta,th_navig_ta,color="xkcd:salmon", label="estimated")
 # axs_nav[0,2].set_title("Theta")
-axs_nav[1,0].plot(UNI_ta,state_d_uni_ta[:,0],color="xkcd:teal", label="actual")
-axs_nav[1,0].plot(INS_ta,v_navig_ta[:,0],color="xkcd:salmon", label="estimated")
-axs_nav[1,0].plot(INS_ta,v_INS_ta[:,0],color="xkcd:light salmon", label="INS only (dead reckoning)")
 axs_nav[1,0].plot(UWB_ta,v_UWB_ta[:,0],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
+axs_nav[1,0].plot(INS_ta,v_navig_ta[:,0],color="xkcd:dark salmon", label="Estimated")
+axs_nav[1,0].plot(INS_ta,v_INS_ta[:,0],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
+axs_nav[1,0].plot(UNI_ta,state_d_uni_ta[:,0],color="xkcd:teal", label="Real")
 axs_nav[1,0].set_title("Vx")
-axs_nav[1,1].plot(UNI_ta,state_d_uni_ta[:,1],color="xkcd:teal", label="actual")
-axs_nav[1,1].plot(INS_ta,v_navig_ta[:,1],color="xkcd:salmon", label="estimated")
-axs_nav[1,1].plot(INS_ta,v_INS_ta[:,1],color="xkcd:light salmon", label="INS only (dead reckoning)")
 axs_nav[1,1].plot(UWB_ta,v_UWB_ta[:,1],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
+axs_nav[1,1].plot(INS_ta,v_navig_ta[:,1],color="xkcd:dark salmon", label="Estimated")
+axs_nav[1,1].plot(INS_ta,v_INS_ta[:,1],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
+axs_nav[1,1].plot(UNI_ta,state_d_uni_ta[:,1],color="xkcd:teal", label="Real")
 axs_nav[1,1].set_title("Vy")
 # axs_nav[1,2].plot(UNI_ta,state_d_uni_ta[:,2],color="xkcd:teal", label="actual")
 # axs_nav[1,2].plot(INS_ta,w_navig_ta,color="xkcd:salmon", label="estimated")

@@ -492,15 +492,18 @@ class Navigator:
         self.wm = w_real + np.random.normal(loc=0.0,scale=self.sigma_INS[1],size=(3,))
         return self.am.copy(),self.wm.copy()
     
-    def generate_UWB_measurement(self,pos,outlier=False):
+    def generate_UWB_measurement(self,pos,interference=[-0.2,0.2],outlier=False, out_mag=0.0):
         # pos = real position, passed as a numpy array
         pos = np.reshape(pos, (3,))
         exact_mes = np.linalg.norm((self.UWB_anchors_pos - pos),axis=1)
+        # white noise
         noisy_mes = exact_mes + np.random.normal(loc=0.0,scale=self.sigma_UWB,size=(self.UWB_anchors_pos.shape[0],))
+        # interference noise
+        noisy_mes = noisy_mes + np.random.uniform(interference[0],interference[1], size=(self.UWB_anchors_pos.shape[0],))
         if outlier:
             # outliers random distributed between [-0.2,0.2], as in the paper
             # here they are added to the measurement from every tag, is it correct?
-            out_mes = -0.2 + 0.4*np.random.random((self.UWB_anchors_pos.shape[0],))
+            out_mes = out_mag*np.random.uniform(-1,1, size=(self.UWB_anchors_pos.shape[0],))
             noisy_mes = noisy_mes + out_mes
         return noisy_mes
 
