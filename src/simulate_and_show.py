@@ -20,12 +20,11 @@ dt_INS = 1./100.
 dt_UWB = 1./5.
 dt_video = 1/20. 
 dt_out = dt_UWB*25.
-t_tot = 30.
+t_tot = 40.
 steps = int(t_tot/dt)
 steps_INS = int(t_tot/dt_INS)
 steps_UWB = int(t_tot/dt_UWB)
 steps_out = int(t_tot/dt_out)
-save_video = False
 
 
 ### TRAJECTORY GENERATION
@@ -79,13 +78,13 @@ a = 0.9999 #sliding window fading coefficient, usually [0.95,0.99]
 l = 20 #sliding window length
 lamb = 1.00001 # >1, parameter for the R innovation contribution weight
 b = 0.999 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
-alpha = 0.55 #secondary regulatory factor for R innovation
-zeta = 50. #outliers detection treshold
+alpha = 0.439 #secondary regulatory factor for R innovation
+zeta = 52. #outliers detection treshold
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
 uni.set_backstepping_gains(4,10,10,20,20)
-v_uni_kin = 0.3
-w_uni_kin = 0.1
+v_uni_kin = 0.5
+w_uni_kin = 0.15
 # Initial values 
 # uni.set_state(p_des_uni_ta[0],v_uni_kin,theta_des_uni_ta[0],w_uni_kin,0.,0.)
 uni.set_state(p_des_uni_ta[0],v_uni_kin,pi,w_uni_kin,0.,0.)
@@ -101,10 +100,11 @@ uni.navig.x_INS.q = uni.navig.xn.q.copy()
 ### DATA STORAGE and video
 #########################
 # Unicycle
+save_video = False
 if save_video:
     fig_anim = plt.figure()
     ax_anim = fig_anim.add_subplot(111)
-    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/prova_video_2.mp4"), fps=int(1/dt_video))
+    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/navigation_simulation_3.mp4"), fps=int(1/dt_video))
 error_uni_ta=np.zeros((steps,3))
 state_uni_ta=np.zeros((steps,3))
 state_d_uni_ta=np.zeros((steps,3))
@@ -241,8 +241,8 @@ for step in range(steps):
             plt.plot(p_INS_ta[:step_INS,0],p_INS_ta[:step_INS,1],color="xkcd:light salmon", ls='--',label="INS only (dead reckoning)")
             #
             ax_anim.set_aspect('equal')
-            x_lim_TMP = (state_uni_ta[step_INS,0]-1,state_uni_ta[step_INS,0]+1)
-            y_lim_TMP = (state_uni_ta[step_INS,1]-1,state_uni_ta[step_INS,1]+1)
+            x_lim_TMP = (state_uni_ta[step_INS,0]-1.2,state_uni_ta[step_INS,0]+1.2)
+            y_lim_TMP = (state_uni_ta[step_INS,1]-1.2,state_uni_ta[step_INS,1]+1.2)
             ax_anim.set(xlim=x_lim_TMP, ylim=y_lim_TMP)
             ax_anim.set_title("Position estimation")
             fig_anim.canvas.draw()
