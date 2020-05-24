@@ -8,6 +8,7 @@ from math import pi as pi
 import os
 import imageio
 import imageio.plugins.pillow
+import time
 
 matplotlib.use('TkAgg')
 parentDirectory = os.path.abspath(os.getcwd())
@@ -20,12 +21,12 @@ dt_INS = 1./100.
 dt_UWB = 1./5.
 dt_video = 1/20. 
 dt_out = dt_UWB*25.
-t_tot = 40.
+t_tot = 20.
 steps = int(t_tot/dt)
 steps_INS = int(t_tot/dt_INS)
 steps_UWB = int(t_tot/dt_UWB)
 steps_out = int(t_tot/dt_out)
-np.random.seed
+np.random.seed(int(time.time()))
 
 ### TRAJECTORY GENERATION
 #########################
@@ -74,12 +75,24 @@ uwb_anchors_pos = np.array([
 ]) # positions of the UWB tags
 sigma_UWB = (0.1)
 sigma_INS = np.array([0.06,0.06])
-a = 0.99999#9 #sliding window fading coefficient, usually [0.95,0.99]
-l = 12 #sliding window length
-lamb = 1.00001 # >1, parameter for the R innovation contribution weight
-b = 0.999#9 #forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
-alpha = 0.434 #secondary regulatory factor for R innovation
-zeta = 52. #outliers detection treshold
+a = 0.986 # sliding window fading coefficient, usually [0.95,0.99]
+l = 20 # sliding window length
+lamb = 1.004 # >1, parameter for the R innovation contribution weight
+b = 0.989 # forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
+alpha = 0.8 # secondary regulatory factor for R innovation
+zeta = 4 #outliers detection treshold
+# values for v0.5, w0.15
+### SET 1 (F):      (a=0.984, l=12, lamb=1.000065, b=0.9815, alpha=0.267, zeta=55)
+### SET 2? (F):     (a=0.9942, l=12, lamb=1.00112, b=0.9938, alpha=0.482, zeta=65)
+### SET 4? (F):     (a=0.9829, l=12, lamb=1.0472, b=0.9865, alpha=0.6021, zeta=62.6)
+### SET 1 L20 (F):      (a=0.99154, l=20, lamb=1.0280, b=0.99617, alpha=0.79934, zeta=56.69)
+### SET 2 l20 (F):      (a=0.9841, l=20, lamb=1.00212, b=0.9972, alpha=0.6054, zeta=67.43}
+### SET 3 l20 (F) 4RMNC:(a=0.9836, l=20, lamb=1.1103,  b=0.9962, alpha=0.555, zeta=46.58]
+## qua con RN stimato usando solo l'ultimo espilon (correttamente)
+### SET 1 l20 (F) 4RMNC RNepsilon:  (a=0.986, l=20, lamb=1.004, b=0.989, alpha=0.856, zeta=55.4)
+### SET 1 l12 (F) 4RMNC RNepsilon:  (a=0.9985, l=12, lamb=1.0504, b=0.992, alpha=0.4235, zeta=61.73)
+#values for v0.8, w0.3
+### SET 1 (F):      (a=0.9816, l=12, lamb=1.1734, b=0.9927, alpha=0.3277, zeta=41.52)
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
 uni.set_backstepping_gains(4,10,10,20,20)
@@ -95,6 +108,14 @@ uni.navig.xn.q = q0.copy()
 uni.navig.x_INS.p = uni.navig.xn.p.copy()
 uni.navig.x_INS.v = uni.navig.xn.v.copy()
 uni.navig.x_INS.q = uni.navig.xn.q.copy()
+# Another navigator system for comparison
+navig2 = rnav.Navigator(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
+navig2.xn.p = uni.navig.xn.p.copy()
+navig2.xn.v = uni.navig.xn.v.copy()
+navig2.xn.q = uni.navig.xn.q.copy()
+navig2.x_INS.p = uni.navig.xn.p.copy()
+navig2.x_INS.v = uni.navig.xn.v.copy()
+navig2.x_INS.q = uni.navig.xn.q.copy()
 
 
 ### DATA STORAGE and video
@@ -102,9 +123,9 @@ uni.navig.x_INS.q = uni.navig.xn.q.copy()
 # Unicycle
 save_video = False
 if save_video:
-    fig_anim = plt.figure()
+    fig_anim = plt.figure(figsize=(8,8),dpi=96)
     ax_anim = fig_anim.add_subplot(111)
-    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/navigation_simulation_prova.mp4"), fps=int(1/dt_video))
+    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/navigation_BOtuned_dump.mp4"), fps=int(1/dt_video))
 error_uni_ta=np.zeros((steps,3))
 state_uni_ta=np.zeros((steps,3))
 state_d_uni_ta=np.zeros((steps,3))
@@ -125,7 +146,11 @@ out_true_times=[]
 p_INS_ta=np.zeros((steps_INS,3))
 th_INS_ta=np.zeros((steps_INS,))
 v_INS_ta=np.zeros((steps_INS,3))
-
+#NAVIGATOR 2
+p_navig2_ta=np.zeros((steps_INS,3))
+th_navig2_ta=np.zeros((steps_INS,))
+v_navig2_ta=np.zeros((steps_INS,3))
+w_navig2_ta=np.zeros((steps_INS,))
 
 ### SIMULATION
 #########################
@@ -152,7 +177,6 @@ for step in range(steps):
     step_video= step // int(dt_video/dt) #floor division
     step_INS = step // int(dt_INS/dt)
     step_UWB = step // int(dt_UWB/dt)
-    print('%f' %(np.round(100*step/steps, 1)))
 
     ##########
     # FILTER #
@@ -162,13 +186,20 @@ for step in range(steps):
         am_data,wm_data = uni.navig.generate_INS_measurement(vd_body,w_body)
         uni.navig.INS_predict_xn_nominal_state(dt_INS,am_data,wm_data)
         uni.navig.INS_predict_x_INS(dt_INS,am_data,wm_data)
+        # navig2
+        navig2.INS_predict_xn_nominal_state(dt_INS,am_data,wm_data)
+        navig2.INS_predict_x_INS(dt_INS,am_data,wm_data)
+        navig2.am_prev=uni.navig.am_prev.copy()
+        navig2.wm_prev=uni.navig.wm_prev.copy()
+        navig2.am=uni.navig.am.copy()
+        navig2.wm=uni.navig.wm.copy()
     if UWBbool:
         # UWB measurement
         if OUTbool:
             UWB_data = uni.navig.generate_UWB_measurement(p,interference=[-0.2,0.2],outlier=True, out_mag=2.)
         else:
             UWB_data = uni.navig.generate_UWB_measurement(p,interference=[-0.2,0.2])
-        uni.navig.UWB_measurement(dt_UWB,UWB_data)
+        uni.navig.UWB_measurement(dt_UWB,UWB_data.copy())
         uni.navig.compute_z()
         #
         uni.navig.update_Q_TMP(dt_UWB)
@@ -192,7 +223,7 @@ for step in range(steps):
             ## only with while cycle:
             #outlier_detected = uni.navig.check_for_outlier()
         # Fuzzy filter
-        uni.navig.apply_fuzzy_filter()
+        uni.navig.apply_fuzzy_filter(no_fuzzy=False)
         # Estimate Measurement Noise Covariance
         uni.navig.update_Rn_theoretical_estimated_MNC()
         #uni.navig.R = uni.navig.Rn.copy()
@@ -203,7 +234,39 @@ for step in range(steps):
         # Update nominal state and reset
         uni.navig.update_xn()
         uni.navig.reset_dx_error_state()
-    
+        ####################################################################################################
+        # SAME FOR NAVIG2
+        navig2.UWB_measurement(dt_UWB,UWB_data.copy())
+        navig2.compute_z()
+        navig2.update_Q_TMP(dt_UWB)
+        navig2.update_F(dt_UWB,navig2.am_prev.copy(),navig2.wm_prev.copy())
+        navig2.predict_P_error_state_covariance(dt_UWB)
+        # Update innovation
+        navig2.update_epsilon_innovation()
+        navig2.update_S_theoretical_innovation_covariance()
+        navig2.update_Sn_estimated_innovation_covariance()
+        # Outlier detection
+        navig2.update_D_theoretical_zzT_expectation()
+        outlier_detected2 = navig2.check_for_outlier()
+        ##while or only an if?
+        if (outlier_detected2):
+            navig2.update_epsilon_innovation(hold=True)
+            navig2.update_Sn_estimated_innovation_covariance()
+            navig2.update_D_theoretical_zzT_expectation()
+            ## only with while cycle:
+            #outlier_detected = uni.navig.check_for_outlier()
+        # Fuzzy filter
+        navig2.apply_fuzzy_filter(no_fuzzy=True)
+        # Estimate Measurement Noise Covariance
+        navig2.update_Rn_theoretical_estimated_MNC()
+        navig2.update_R_estimated_MNC()
+        # Compute Kalman Gain and Update error state
+        navig2.update_Kalman_gain()
+        navig2.update_dx_and_P()
+        # Update nominal state and reset
+        navig2.update_xn()
+        navig2.reset_dx_error_state()
+    ###########
     # Save data
     error_uni_ta[step,:] = uni.e.copy()
     state_uni_ta[step,:2]= uni.p.copy()
@@ -217,6 +280,10 @@ for step in range(steps):
         p_INS_ta[step_INS,:] = uni.navig.x_INS.p.copy()
         th_INS_ta[step_INS] = (quat.as_rotation_vector(uni.navig.x_INS.q)[2])%(2*pi)
         v_INS_ta[step_INS] = uni.navig.x_INS.v.copy()
+        # navig2
+        p_navig2_ta[step_INS,:] = navig2.xn.p.copy()
+        th_navig2_ta[step_INS] = (quat.as_rotation_vector(navig2.xn.q)[2])%(2*pi)
+        v_navig2_ta[step_INS] = navig2.xn.v.copy()
     if UWBbool:
         p_UWB_ta[step_UWB,:] = uni.navig.pmUWB.copy()
         v_UWB_ta[step_UWB,:] = uni.navig.vmUWB.copy()
@@ -241,8 +308,8 @@ for step in range(steps):
             plt.plot(p_INS_ta[:step_INS,0],p_INS_ta[:step_INS,1],color="xkcd:light salmon", ls='--',label="INS only (dead reckoning)")
             #
             ax_anim.set_aspect('equal')
-            x_lim_TMP = (state_uni_ta[step_INS,0]-1.2,state_uni_ta[step_INS,0]+1.2)
-            y_lim_TMP = (state_uni_ta[step_INS,1]-1.2,state_uni_ta[step_INS,1]+1.2)
+            x_lim_TMP = (state_uni_ta[step_INS,0]-1.5,state_uni_ta[step_INS,0]+1.5)
+            y_lim_TMP = (state_uni_ta[step_INS,1]-1.5,state_uni_ta[step_INS,1]+1.5)
             ax_anim.set(xlim=x_lim_TMP, ylim=y_lim_TMP)
             ax_anim.set_title("Position estimation")
             fig_anim.canvas.draw()
@@ -256,14 +323,21 @@ for step in range(steps):
     uni.step_simulation_KIN(dt,v_uni_kin,w_uni_kin)
     if not (step % int(dt_INS/dt)):
         uni.navig.iterations += 1
+        navig2.iterations += 1
     #print(np.round(100*step/steps,2),'%')
     if INSbool:
         step_INS +=1
     if UWBbool:
         step_UWB +=1
+    #print('%f' %(np.round(100*step/steps, 1)))
 
 ### PLOT
 #########################
+save_figs=False
+fig_name_trj = os.path.join(parentDirectory, "graphs/trajectory_4.png")
+fig_name_nav = os.path.join(parentDirectory, "graphs/navigation_4.png")
+fig_name_comp = os.path.join(parentDirectory, "graphs/SHFAF_SHAF_comparison_4.png")
+fig_size=(10,8)
 ### Unicycle control
 # fig_uni,axs_uni = plt.subplots(2,2)
 # axs_uni[0,0].plot(error_uni_ta[:,0], color="xkcd:light teal", label="x")
@@ -282,69 +356,88 @@ for step in range(steps):
 # fig_uni.legend(handles_uni, labels_uni, loc='center right')
 
 ### Trajectory
-fig_trj,axs_trj = plt.subplots()
+fig_trj,axs_trj = plt.subplots(figsize=fig_size)
 axs_trj.plot(p_UWB_ta[:,0],p_UWB_ta[:,1],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
+axs_trj.plot(
+    [x[0] for x in out_true_ta],[x[1] for x in out_true_ta],
+    color="xkcd:green", label="Outliers (injected)", marker="o", fillstyle='full', linestyle="None")
 axs_trj.plot(
     [x[0] for x in out_marked_ta],[x[1] for x in out_marked_ta],
     color="xkcd:black", label="Outliers (marked)", marker="o", fillstyle='none', linestyle="None")
-axs_trj.plot(
-    [x[0] for x in out_true_ta],[x[1] for x in out_true_ta],
-    color="xkcd:green", label="Outliers (injected)", marker="1", fillstyle='none', linestyle="None")
 #axs_trj[0].plot(p_des_uni_ta[:,0],p_des_uni_ta[:,1],color="salmon", label="desired")
 axs_trj.plot(p_navig_ta[:,0],p_navig_ta[:,1],color="xkcd:dark salmon", label="Estimated")
 axs_trj.plot(p_INS_ta[:,0],p_INS_ta[:,1],color="xkcd:light salmon", ls='--', label="INS only (dead reckoning)")
 axs_trj.plot(state_uni_ta[:,0],state_uni_ta[:,1],color="xkcd:teal", label="Real")
-axs_trj.set_title("Trajectory [x-y]")
+#axs_trj.plot(p_navig2_ta[:,0],p_navig2_ta[:,1],color="xkcd:dark yellow", label="SHAF")
+axs_trj.set(xlabel="X [m]",ylabel="Y [m]",title="Trajectory [x-y]",xlim=(-4,2),ylim=(-8,2),aspect='equal')
 axs_trj.set_aspect('equal')
 handles_trj, labels_trj = axs_trj.get_legend_handles_labels()
-fig_trj.legend(handles_trj, labels_trj, loc='center right')
+fig_trj.legend(handles_trj, labels_trj, loc='upper right')
+if save_figs:
+    fig_trj.savefig(fig_name_trj)
 
 ### Navigation 
 UNI_ta = np.linspace(0,t_tot,state_uni_ta.shape[0])
 INS_ta = np.linspace(0,t_tot,p_navig_ta.shape[0])
 UWB_ta = np.linspace(0,t_tot,p_UWB_ta.shape[0])
-fig_nav,axs_nav = plt.subplots(2,2)
+fig_nav,axs_nav = plt.subplots(2,2,figsize=fig_size)
 axs_nav[0,0].plot(UWB_ta,p_UWB_ta[:,0],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
+axs_nav[0,0].plot(
+    out_true_times, [x[0] for x in out_true_ta],
+    color="xkcd:green", label="Outliers", marker="o", fillstyle='full', linestyle="None")
 axs_nav[0,0].plot(
     out_marked_times, [x[0] for x in out_marked_ta],
     color="xkcd:black", label="Outliers", marker="o", fillstyle='none', linestyle="None")
-axs_nav[0,0].plot(
-    out_true_times, [x[0] for x in out_true_ta],
-    color="xkcd:green", label="Outliers", marker="1", fillstyle='none', linestyle="None")
 axs_nav[0,0].plot(INS_ta,p_navig_ta[:,0],color="xkcd:dark salmon", label="Estimated")
 axs_nav[0,0].plot(INS_ta,p_INS_ta[:,0],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
 axs_nav[0,0].plot(UNI_ta,state_uni_ta[:,0],color="xkcd:teal", label="Real")
-axs_nav[0,0].set_title("X")
+axs_nav[0,0].set(xlabel="Time [s]",ylabel="X [m]",title='X pos')
+#
+axs_nav[0,1].plot(
+    out_true_times, [x[1] for x in out_true_ta],
+    color="xkcd:green", label="Outliers", marker="o", fillstyle='full', linestyle="None")
 axs_nav[0,1].plot(
     out_marked_times, [x[1] for x in out_marked_ta],
     color="xkcd:black", label="Outliers", marker="o", fillstyle='none', linestyle="None")
-axs_nav[0,1].plot(
-    out_true_times, [x[1] for x in out_true_ta],
-    color="xkcd:green", label="Outliers", marker="1", fillstyle='none', linestyle="None")
 axs_nav[0,1].plot(UWB_ta,p_UWB_ta[:,1],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
 axs_nav[0,1].plot(UNI_ta,state_uni_ta[:,1],color="xkcd:teal", label="Real")
 axs_nav[0,1].plot(INS_ta,p_navig_ta[:,1],color="xkcd:dark salmon", label="Estimated")
 axs_nav[0,1].plot(INS_ta,p_INS_ta[:,1],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
-axs_nav[0,1].set_title("Y")
+axs_nav[0,1].set(xlabel="Time [s]",ylabel="Y [m]", title='Y pos')
 # axs_nav[0,2].plot(UNI_ta,state_uni_ta[:,2],color="xkcd:teal", label="actual")
 # axs_nav[0,2].plot(INS_ta,th_navig_ta,color="xkcd:salmon", label="estimated")
 # axs_nav[0,2].set_title("Theta")
+#
 axs_nav[1,0].plot(UWB_ta,v_UWB_ta[:,0],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
 axs_nav[1,0].plot(INS_ta,v_navig_ta[:,0],color="xkcd:dark salmon", label="Estimated")
 axs_nav[1,0].plot(INS_ta,v_INS_ta[:,0],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
 axs_nav[1,0].plot(UNI_ta,state_d_uni_ta[:,0],color="xkcd:teal", label="Real")
-axs_nav[1,0].set_title("Vx")
+axs_nav[1,0].set(xlabel="Time [s]",ylabel="Vx [m/s]", title='Vel x')
 axs_nav[1,1].plot(UWB_ta,v_UWB_ta[:,1],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
 axs_nav[1,1].plot(INS_ta,v_navig_ta[:,1],color="xkcd:dark salmon", label="Estimated")
 axs_nav[1,1].plot(INS_ta,v_INS_ta[:,1],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
 axs_nav[1,1].plot(UNI_ta,state_d_uni_ta[:,1],color="xkcd:teal", label="Real")
-axs_nav[1,1].set_title("Vy")
+axs_nav[1,1].set(xlabel="Time [s]",ylabel="Vy [m/s]", title='Vel y')
 # axs_nav[1,2].plot(UNI_ta,state_d_uni_ta[:,2],color="xkcd:teal", label="actual")
 # axs_nav[1,2].plot(INS_ta,w_navig_ta,color="xkcd:salmon", label="estimated")
 # axs_nav[1,2].set_title("W (ang.speed)")
 handles_nav, labels_nav = axs_nav[0,0].get_legend_handles_labels()
-fig_nav.legend(handles_nav, labels_nav, loc='lower center')
-#
+fig_nav.legend(handles_nav, labels_nav, loc='upper right')
+if save_figs:
+    fig_nav.savefig(fig_name_nav)
+
+### Comparison
+fig_comp, axs_comp = plt.subplots(figsize=(9,5))
+axs_comp.plot(INS_ta,np.linalg.norm((state_uni_ta[:,0:2]-p_navig_ta[:,0:2]),axis=1), label="SHFAF", color="xkcd:teal")
+axs_comp.plot(INS_ta,np.linalg.norm((state_uni_ta[:,0:2]-p_navig2_ta[:,0:2]),axis=1), label="SHAF", color="xkcd:salmon", linestyle='--')
+#axs_comp.set_title("Performance comparison")
+axs_comp.set(xlabel="Time [s]",ylabel="Position error [m]", title="Performance comparison")
+handles_comp, labels_comp = axs_comp.get_legend_handles_labels()
+fig_comp.legend(handles_comp, labels_comp, loc='upper right')
+if save_figs:
+    fig_comp.savefig(fig_name_comp)
+
+###
 plt.show()
 
 ### END ROUTINE

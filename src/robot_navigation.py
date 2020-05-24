@@ -133,8 +133,8 @@ class Navigator:
         self.epsilon = np.zeros((self.l_par,6)) # most recent as last element
         self.Sn = np.eye(6) # estimated epsilon covariance (eqn(36))
         self.S = np.eye(6) # theorethical epsilon covariance (eqn(23))
-        self.Rn = MNCsigma*np.eye(6) # theoretical MNC estimate
-        self.R = MNCsigma*np.eye(6) # estimated MNC
+        self.Rn = 4*MNCsigma*np.eye(6) # theoretical MNC estimate
+        self.R = 4*MNCsigma*np.eye(6) # estimated MNC
         self.set_R_innovation_weight_par(lamb,b, alpha) #parameters of R innovation contribution weight, eqn (27)
         self.fuzzy_setup()
         self.rfz = 0.
@@ -384,12 +384,12 @@ class Navigator:
     def update_Rn_theoretical_estimated_MNC(self):
         # eqn (25)
         epsilon_k = np.reshape(self.epsilon[-1,:],(1,6))
-        self.Rn = (
-            self.Sn - self.H.dot(self.P.dot(self.H.T))
-        )
         # self.Rn = (
-        #     (epsilon_k.T).dot(epsilon_k) - self.H.dot(self.P.dot(self.H.T))
+        #     self.Sn - self.H.dot(self.P.dot(self.H.T))
         # )
+        self.Rn = (
+            (epsilon_k.T).dot(epsilon_k) - self.H.dot(self.P.dot(self.H.T))
+        )
         return self.Rn.copy()
     
     def fuzzy_setup(self):
@@ -407,14 +407,18 @@ class Navigator:
         self.fuzzy_filter_system = ctrl.ControlSystem(rules=[fuzzy_rule1, fuzzy_rule2, fuzzy_rule3])
         self.fuzzy_filter = ctrl.ControlSystemSimulation(self.fuzzy_filter_system)
 
-    def apply_fuzzy_filter(self):
+    def apply_fuzzy_filter(self, no_fuzzy=False):
         self.rfz = abs(np.trace(self.Sn)/np.trace(self.S) - 1)
-        if self.iterations < 20:
-            self.sfz = 1.
-            return self.sfz
-        self.fuzzy_filter.input['rfuzzy'] = self.rfz
-        self.fuzzy_filter.compute()
-        self.sfz = self.fuzzy_filter.output['sfuzzy']
+        if no_fuzzy:
+            #self.sfz=self.rfz
+            self.sfz=1
+        else:
+            if self.iterations < 20:
+                self.sfz = 1.
+                return self.sfz
+            self.fuzzy_filter.input['rfuzzy'] = self.rfz
+            self.fuzzy_filter.compute()
+            self.sfz = self.fuzzy_filter.output['sfuzzy']
         return self.sfz
 
     def set_R_innovation_weight_par(self, lamb, b, alpha):
