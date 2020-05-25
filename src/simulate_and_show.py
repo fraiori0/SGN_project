@@ -75,12 +75,12 @@ uwb_anchors_pos = np.array([
 ]) # positions of the UWB tags
 sigma_UWB = (0.1)
 sigma_INS = np.array([0.06,0.06])
-a = 0.986 # sliding window fading coefficient, usually [0.95,0.99]
-l = 20 # sliding window length
-lamb = 1.004 # >1, parameter for the R innovation contribution weight
-b = 0.989 # forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
-alpha = 0.8 # secondary regulatory factor for R innovation
-zeta = 4 #outliers detection treshold
+a = 0.9784 # sliding window fading coefficient, usually [0.95,0.99]
+l = 12 # sliding window length
+lamb = 1.012 # >1, parameter for the R innovation contribution weight
+b = 0.9976 # forgetting factor of the R innovation contribution weight, usually [0.95,0.99]
+alpha = 0.5 # secondary regulatory factor for R innovation
+zeta = 4.5 #outliers detection treshold
 # values for v0.5, w0.15
 ### SET 1 (F):      (a=0.984, l=12, lamb=1.000065, b=0.9815, alpha=0.267, zeta=55)
 ### SET 2? (F):     (a=0.9942, l=12, lamb=1.00112, b=0.9938, alpha=0.482, zeta=65)
@@ -91,6 +91,7 @@ zeta = 4 #outliers detection treshold
 ## qua con RN stimato usando solo l'ultimo espilon (correttamente)
 ### SET 1 l20 (F) 4RMNC RNepsilon:  (a=0.986, l=20, lamb=1.004, b=0.989, alpha=0.856, zeta=55.4)
 ### SET 1 l12 (F) 4RMNC RNepsilon:  (a=0.9985, l=12, lamb=1.0504, b=0.992, alpha=0.4235, zeta=61.73)
+### SET 1 l12 (F) 4RMNC RNepsilon:  (a=0.9784, l=12, lamb=1.0119, b=0.9976, alpha=0.4577, zeta=5.8)
 #values for v0.8, w0.3
 ### SET 1 (F):      (a=0.9816, l=12, lamb=1.1734, b=0.9927, alpha=0.3277, zeta=41.52)
 # Unicycle control
@@ -121,11 +122,11 @@ navig2.x_INS.q = uni.navig.xn.q.copy()
 ### DATA STORAGE and video
 #########################
 # Unicycle
-save_video = False
+save_video = True
 if save_video:
     fig_anim = plt.figure(figsize=(8,8),dpi=96)
     ax_anim = fig_anim.add_subplot(111)
-    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/navigation_BOtuned_dump.mp4"), fps=int(1/dt_video))
+    writer = imageio.get_writer(os.path.join(parentDirectory, "videos/navigation_BOtuned_corr.mp4"), fps=int(1/dt_video))
 error_uni_ta=np.zeros((steps,3))
 state_uni_ta=np.zeros((steps,3))
 state_d_uni_ta=np.zeros((steps,3))
@@ -404,8 +405,9 @@ axs_nav[0,1].plot(UNI_ta,state_uni_ta[:,1],color="xkcd:teal", label="Real")
 axs_nav[0,1].plot(INS_ta,p_navig_ta[:,1],color="xkcd:dark salmon", label="Estimated")
 axs_nav[0,1].plot(INS_ta,p_INS_ta[:,1],color="xkcd:light salmon",ls='--', label="INS only (dead reckoning)")
 axs_nav[0,1].set(xlabel="Time [s]",ylabel="Y [m]", title='Y pos')
-# axs_nav[0,2].plot(UNI_ta,state_uni_ta[:,2],color="xkcd:teal", label="actual")
-# axs_nav[0,2].plot(INS_ta,th_navig_ta,color="xkcd:salmon", label="estimated")
+# axs_nav[0,2].plot(UNI_ta,state_uni_ta[:,2],color="xkcd:teal", label="Real")
+# axs_nav[0,2].plot(INS_ta,th_navig_ta,color="xkcd:dark salmon", label="Estimated")
+# axs_nav[0,2].plot(INS_ta,th_navig_ta,color="xkcd:light salmon", label="INS only (dead reckoning)")
 # axs_nav[0,2].set_title("Theta")
 #
 axs_nav[1,0].plot(UWB_ta,v_UWB_ta[:,0],color="xkcd:orange", label="UWB meas.", marker="1", linestyle="None")
