@@ -82,18 +82,9 @@ b = 0.9976 # forgetting factor of the R innovation contribution weight, usually 
 alpha = 0.5 # secondary regulatory factor for R innovation
 zeta = 4.5 #outliers detection treshold
 # values for v0.5, w0.15
-### SET 1 (F):      (a=0.984, l=12, lamb=1.000065, b=0.9815, alpha=0.267, zeta=55)
-### SET 2? (F):     (a=0.9942, l=12, lamb=1.00112, b=0.9938, alpha=0.482, zeta=65)
-### SET 4? (F):     (a=0.9829, l=12, lamb=1.0472, b=0.9865, alpha=0.6021, zeta=62.6)
-### SET 1 L20 (F):      (a=0.99154, l=20, lamb=1.0280, b=0.99617, alpha=0.79934, zeta=56.69)
-### SET 2 l20 (F):      (a=0.9841, l=20, lamb=1.00212, b=0.9972, alpha=0.6054, zeta=67.43}
-### SET 3 l20 (F) 4RMNC:(a=0.9836, l=20, lamb=1.1103,  b=0.9962, alpha=0.555, zeta=46.58]
-## qua con RN stimato usando solo l'ultimo espilon (correttamente)
 ### SET 1 l20 (F) 4RMNC RNepsilon:  (a=0.986, l=20, lamb=1.004, b=0.989, alpha=0.856, zeta=55.4)
 ### SET 1 l12 (F) 4RMNC RNepsilon:  (a=0.9985, l=12, lamb=1.0504, b=0.992, alpha=0.4235, zeta=61.73)
 ### SET 1 l12 (F) 4RMNC RNepsilon:  (a=0.9784, l=12, lamb=1.0119, b=0.9976, alpha=0.4577, zeta=5.8)
-#values for v0.8, w0.3
-### SET 1 (F):      (a=0.9816, l=12, lamb=1.1734, b=0.9927, alpha=0.3277, zeta=41.52)
 # Unicycle control
 uni = rnav.Unicycle(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
 uni.set_backstepping_gains(4,10,10,20,20)
@@ -109,7 +100,7 @@ uni.navig.xn.q = q0.copy()
 uni.navig.x_INS.p = uni.navig.xn.p.copy()
 uni.navig.x_INS.v = uni.navig.xn.v.copy()
 uni.navig.x_INS.q = uni.navig.xn.q.copy()
-# Another navigator system for comparison
+# Another navigator system for comparison without using fuzzy filter
 navig2 = rnav.Navigator(sigma_INS,sigma_UWB,uwb_anchors_pos,a,l,lamb,b,alpha,zeta)
 navig2.xn.p = uni.navig.xn.p.copy()
 navig2.xn.v = uni.navig.xn.v.copy()
@@ -320,17 +311,14 @@ for step in range(steps):
             ax_anim.clear()
     
     # End step operations
-    #uni.step_simulation(dt,tau_v,tau_th)
     uni.step_simulation_KIN(dt,v_uni_kin,w_uni_kin)
     if not (step % int(dt_INS/dt)):
         uni.navig.iterations += 1
         navig2.iterations += 1
-    #print(np.round(100*step/steps,2),'%')
     if INSbool:
         step_INS +=1
     if UWBbool:
         step_UWB +=1
-    #print('%f' %(np.round(100*step/steps, 1)))
 
 ### PLOT
 #########################
@@ -339,7 +327,7 @@ fig_name_trj = os.path.join(parentDirectory, "graphs/trajectory_4.png")
 fig_name_nav = os.path.join(parentDirectory, "graphs/navigation_4.png")
 fig_name_comp = os.path.join(parentDirectory, "graphs/SHFAF_SHAF_comparison_4.png")
 fig_size=(10,8)
-### Unicycle control
+### Unicycle control (useful for checking back-stepping behaviour)
 # fig_uni,axs_uni = plt.subplots(2,2)
 # axs_uni[0,0].plot(error_uni_ta[:,0], color="xkcd:light teal", label="x")
 # axs_uni[0,0].plot(error_uni_ta[:,1], color="xkcd:dark teal", label="y")
@@ -428,7 +416,7 @@ fig_nav.legend(handles_nav, labels_nav, loc='upper right')
 if save_figs:
     fig_nav.savefig(fig_name_nav)
 
-### Comparison
+### Comparison SHFAF-SHAF
 fig_comp, axs_comp = plt.subplots(figsize=(9,5))
 axs_comp.plot(INS_ta,np.linalg.norm((state_uni_ta[:,0:2]-p_navig_ta[:,0:2]),axis=1), label="SHFAF", color="xkcd:teal")
 axs_comp.plot(INS_ta,np.linalg.norm((state_uni_ta[:,0:2]-p_navig2_ta[:,0:2]),axis=1), label="SHAF", color="xkcd:salmon", linestyle='--')

@@ -17,7 +17,7 @@ matplotlib.use('TkAgg')
 parentDirectory = os.path.abspath(os.getcwd())
 
 def simulate(params, t_tot=30, folds=7):
-    #paramas = dict(a, lamb, b, alpha, zeta)
+    #params = dict(a, lamb, b, alpha, zeta)
     dt = 1./100.
     dt_INS = 1./100.
     dt_UWB = 1./5.

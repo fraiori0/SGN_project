@@ -384,9 +384,6 @@ class Navigator:
     def update_Rn_theoretical_estimated_MNC(self):
         # eqn (25)
         epsilon_k = np.reshape(self.epsilon[-1,:],(1,6))
-        # self.Rn = (
-        #     self.Sn - self.H.dot(self.P.dot(self.H.T))
-        # )
         self.Rn = (
             (epsilon_k.T).dot(epsilon_k) - self.H.dot(self.P.dot(self.H.T))
         )
@@ -461,7 +458,6 @@ class Navigator:
         return self.K
     
     def update_dx_and_P(self):
-        # this update consider only position and velocity of the robot
         self.dxapp = self.K.dot(self.epsilon[-1])
         # update also dx to keep a match between the two
         self.dx.p = self.dxapp[0:3]
@@ -489,7 +485,7 @@ class Navigator:
         self.dx.wb = self.dxapp[12:15]
     
     def generate_INS_measurement(self,a_real,w_real):
-        #add real noise to the real state, that should be passed as an input
+        # add noise to the real state, that should be passed as an input
         self.am_prev = self.am.copy()
         self.wm_prev = self.wm.copy()
         self.am = a_real + np.random.normal(loc=0.0,scale=self.sigma_INS[0],size=(3,))
@@ -510,40 +506,6 @@ class Navigator:
             out_mes = out_mag*np.random.uniform(-1,1, size=(self.UWB_anchors_pos.shape[0],))
             noisy_mes = noisy_mes + out_mes
         return noisy_mes
-
-        
-    # def compute_dxd(self,dtheta,am,an,aw,wm,wn,ww):
-    #     """derivative of the error state, eq.(5) of the paper
-
-    #     Parameters
-    #     ----------
-    #     dtheta : np.array(3,float)
-    #         rotation error of the quaternion\n
-    #     am : np.array(3,float)
-    #         measured acceleration in body-frame (output of INS accelerometer)\n
-    #     an : np.array(3,float)
-    #         noise on acceleration measurement\n
-    #     aw : np.array(3,float)
-    #         random walk noise of bias of acceleration measurement\n
-    #     wm : np.array(3,float)
-    #         measured angular speed (output of INS gyroscope)\n
-    #     wn : np.array(3,float)
-    #         noise on angular speed measurement\n
-    #     ww : np.array(3,float)
-    #         random walk noise of bias of angular speed measurement
-
-    #     Returns
-    #     -------
-    #     (dvd,dTHETAD,dabd,dwbd)
-    #         WARNING, dthetad is not dqd?
-    #         derivatives, to be passed when calling self.dx.backward_euler()
-    #     """
-    #     dvd = -rotate_vector(self.x.q, ((np.cross((am-self.xn.ab),dtheta)) + self.dx.ab + an)) 
-    #     dthetad = - (np.cross((wm-self.xn.wb),dtheta) + ww + wn)
-    #     dabd = aw
-    #     dwbd = ww
-    #     return (dvd,dthetad,dabd,dwbd)
-#############################################################################
 
 
 class Unicycle_State:
@@ -590,7 +552,7 @@ class Unicycle_State:
 
         
 class Unicycle(Unicycle_State):
-    # based on the equations reported in the notes by Prof. A.Bicchi, Nonlinear Systems, pag.86
+    # based on the equations reported in the notes by Prof. A.Bicchi, Notes on Nonlinear Systems, pag.86
     def __init__(self,sigma_INS, sigma_UWB,UWB_anchors_pos, a, l, lamb, b, alpha, zeta):
         super().__init__()
         self.navig = Navigator(sigma_INS, sigma_UWB, UWB_anchors_pos, a, l, lamb, b, alpha, zeta)
@@ -622,7 +584,8 @@ class Unicycle(Unicycle_State):
         self.kbw = kbw
     
     def trajectory_tracking_backstepping_step1(self,dt, p_des, v_des, theta_des, w_des):
-        """[summary]
+        """First step of unicycle backstepping control, based on the notes from 
+        from Prof. A.Bicchi, Università di Pisa
 
         Parameters
         ----------
@@ -653,6 +616,14 @@ class Unicycle(Unicycle_State):
         self.e = np.array((e1,e2,e3))
     
     def trajectory_tracking_backstepping_step2(self):
+        """Second step of unicycle backstepping control, based on the notes from 
+        from Prof. A.Bicchi, Università di Pisa
+
+        Returns
+        -------
+        (tau_v, tau_th)
+            tau to be applied for control
+        """
         #eqns(3.73 and next ones)
         tau_v = self.m * (self.back1d[0] - self.kbv*(self.v-self.back1[0]) -self.e[0])
         tau_th = self.Iz * (self.back1d[1] - self.kbw*(self.w-self.back1[1]) - self.k1* np.sin(self.e[2]))
